@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CronoBalanza</title>
+<title>FotoBalanza</title>
 <style>
 :root{--bg:#f4f4f6;--card:#fff;--tx:#18181b;--mu:#6b6b76;--ac:#0a7d4f;--bd:#d9d9e0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root{--bg:#0e0e11;--card:#1a1a1f;--tx:#f2f2f5;--mu:#9a9aa6;--ac:#34d399;--bd:#2c2c34}}
@@ -16,119 +16,101 @@ video{width:100%;display:block}
 #ov{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .big{display:flex;gap:10px;margin-bottom:10px}
 .big div{flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:8px}
-.big b{display:block;font-size:34px;font-variant-numeric:tabular-nums}
+.big b{display:block;font-size:30px;font-variant-numeric:tabular-nums}
 .big small,.mu{color:var(--mu);font-size:12px}
 #st{font-weight:600;margin:6px 0;color:var(--ac)}
-button,select{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button,select,input{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+input{width:80px}
 button.p{background:var(--ac);color:var(--bg);border:0;font-weight:700}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px;border-bottom:1px solid var(--bd);text-align:left}
+#gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
+#gal div{background:var(--bg);border-radius:10px;padding:6px;font-size:12px}
+#gal img{width:100%;border-radius:8px;display:block;margin-bottom:6px}
+#gal button{padding:6px 8px;font-size:12px;margin-right:4px}
 </style></head><body>
-<h1>⚖️ CronoBalanza</h1>
+<h1>📸 FotoBalanza</h1>
 <div class="grid">
 <div class="card">
  <div id="wrap"><video id="v" autoplay playsinline muted></video><canvas id="ov"></canvas></div>
- <div class="row"><button class="p" id="cam">Iniciar cámara</button><button id="cal">Calibrar con 0.0</button></div>
- <div class="mu">1) Arrastra un rectángulo que cubra las 5 posiciones de dígito (las vacías a la izquierda y el 0.0), sin la «g» ni «Zero». 2) Con la balanza en 0.0 pulsa Calibrar. Puntos verdes = segmento encendido, rojos = apagado.</div>
+ <div class="row"><button class="p" id="cam">Iniciar cámara</button></div>
+ <div class="mu">Arrastra un rectángulo sobre el display (los números y su zona, sin botones). Cuando ese recuadro cambie respecto a como estaba al armar, empieza la cuenta.</div>
  <div class="row">
-  <label class="mu">Dígitos <select id="nd"><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option></select></label>
-  <label class="mu">Decimales <select id="dec"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
-  <label class="mu">Color <select id="pol"><option value="d">oscuros</option><option value="l">claros</option></select></label>
-  <label class="mu">Unidad <select id="un"><option>g</option><option>kg</option><option>oz</option></select></label>
+  <label class="mu">Tiempo (s) <input id="dur" type="number" min="1" step="0.5" value="10"></label>
+  <label class="mu">Sensibilidad <select id="sen"><option value="0.15">alta</option><option value="0.3" selected>media</option><option value="0.5">baja</option></select></label>
  </div>
 </div>
 <div class="card">
- <div class="big"><div><small>Lectura</small><b id="rd">—</b></div><div><small>Tiempo</small><b id="tm">0.0 s</b></div></div>
+ <div class="big"><div><small>Cambio</small><b id="df">0.00</b></div><div><small>Tiempo</small><b id="tm">0.0 s</b></div></div>
  <div id="st">Inicia la cámara y encuadra el display.</div>
- <div class="row"><button class="p" id="arm">Armar</button><button id="man">Iniciar manual</button><button id="rst">Cancelar</button></div>
- <div class="mu">Al armar, el cronómetro arranca solo cuando la lectura sube respecto al valor inicial y se detiene a los 10 s.</div>
- <table id="tb"><tr><th>#</th><th>Masa a 10 s</th><th>Hora</th></tr></table>
- <div class="row"><button id="cp">Copiar CSV</button><button id="cl">Borrar</button></div>
+ <div class="row"><button class="p" id="arm">Armar</button><button id="man">Iniciar manual</button><button id="snap">Foto ahora</button><button id="rst">Cancelar</button></div>
+ <div class="mu">Armar: guarda cómo se ve el display ahora (déjalo quieto, en cero). Al cambiar, cuenta el tiempo y toma la foto.</div>
+ <div id="gal"></div>
 </div></div>
 <script>
 const $=i=>document.getElementById(i);
-const v=$('v'),ov=$('ov'),ctx=ov.getContext('2d'),wk=document.createElement('canvas'),wc=wk.getContext('2d',{willReadFrequently:true});
-let roi={x:.55,y:.45,w:.26,h:.12},SL=.25,drag=null,state='off',base=0,t0=0,last=null,hits=0,recs=[],dbg=[],cand=null,cc=0;
-const SEG={0:'abcdef',1:'bc',2:'abdeg',3:'abcdg',4:'bcfg',5:'acdfg',6:'acdefg',7:'abc',8:'abcdefg',9:'abcdfg'};
-const SG={a:[.22,.07,.78,.07],b:[.84,.18,.84,.42],c:[.84,.58,.84,.82],d:[.22,.93,.78,.93],e:[.16,.58,.16,.82],f:[.16,.18,.16,.42],g:[.22,.5,.78,.5]};
-function save(){try{localStorage.setItem('cb2',JSON.stringify({roi,SL,nd:$('nd').value,dec:$('dec').value,un:$('un').value,pol:$('pol').value}))}catch(e){}}
-try{const j=JSON.parse(localStorage.getItem('cb2')||'null');if(j){roi=j.roi;SL=j.SL;for(const k of['nd','dec','un','pol'])$(k).value=j[k]}}catch(e){}
-['nd','dec','un','pol'].forEach(k=>$(k).onchange=()=>{save();draw()});
+const v=$('v'),ov=$('ov'),ctx=ov.getContext('2d'),sm=document.createElement('canvas'),sc=sm.getContext('2d',{willReadFrequently:true});
+sm.width=48;sm.height=16;
+let roi={x:.55,y:.45,w:.26,h:.12},drag=null,state='off',ref=null,t0=0,hits=0,n=0,urls=[];
+function save(){try{localStorage.setItem('fb1',JSON.stringify({roi,dur:$('dur').value,sen:$('sen').value}))}catch(e){}}
+try{const j=JSON.parse(localStorage.getItem('fb1')||'null');if(j){roi=j.roi;$('dur').value=j.dur;$('sen').value=j.sen}}catch(e){}
+$('dur').onchange=$('sen').onchange=save;
 $('cam').onclick=async()=>{try{
  const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}},audio:false});
- v.srcObject=s;await v.play();$('st').textContent='Cámara lista. Encuadra los dígitos y pulsa Calibrar con la balanza en 0.0.';state='idle';$('cam').style.display='none';
+ v.srcObject=s;await v.play();state='idle';$('cam').style.display='none';$('st').textContent='Cámara lista. Encuadra el display y pulsa Armar.';
 }catch(e){$('st').textContent='Sin acceso a la cámara. Concede el permiso en Ajustes de Safari.'}};
 function fit(){ov.width=v.clientWidth;ov.height=v.clientHeight;draw()}
 v.addEventListener('loadedmetadata',fit);addEventListener('resize',fit);
 function draw(){ctx.clearRect(0,0,ov.width,ov.height);const W=ov.width,H=ov.height;
- ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.strokeRect(roi.x*W,roi.y*H,roi.w*W,roi.h*H);
- const n=+$('nd').value;ctx.strokeStyle='rgba(52,211,153,.4)';ctx.lineWidth=1;
- for(let i=1;i<n;i++){const x=(roi.x+roi.w*i/n)*W;ctx.beginPath();ctx.moveTo(x,roi.y*H);ctx.lineTo(x,(roi.y+roi.h)*H);ctx.stroke()}
- for(const p of dbg){ctx.fillStyle=p.on?'#22ff88':'#ff4455';ctx.beginPath();ctx.arc(p.x*W,p.y*H,3,0,7);ctx.fill()}}
+ ctx.strokeStyle=state==='run'?'#ff9f1a':'#34d399';ctx.lineWidth=3;ctx.strokeRect(roi.x*W,roi.y*H,roi.w*W,roi.h*H)}
 const pt=e=>{const r=ov.getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]};
 ov.onpointerdown=e=>{ov.setPointerCapture(e.pointerId);drag=pt(e)};
 ov.onpointermove=e=>{if(!drag)return;const[x,y]=pt(e);roi={x:Math.min(drag[0],x),y:Math.min(drag[1],y),w:Math.max(.02,Math.abs(x-drag[0])),h:Math.max(.02,Math.abs(y-drag[1]))};draw()};
 ov.onpointerup=()=>{drag=null;save()};
-function read(r,sl){
- const out={val:null,m:0,pts:[]};
- if(!v.videoWidth)return out;
+function sample(){
+ if(!v.videoWidth)return null;
  const sw=v.videoWidth,sh=v.videoHeight;
- wk.width=Math.max(8,Math.round(r.w*sw));wk.height=Math.max(8,Math.round(r.h*sh));
- wc.drawImage(v,r.x*sw,r.y*sh,r.w*sw,r.h*sh,0,0,wk.width,wk.height);
- const W=wk.width,H=wk.height,d=wc.getImageData(0,0,W,H).data;
- const V=(x,y)=>{x=Math.max(0,Math.min(W-1,Math.round(x)));y=Math.max(0,Math.min(H-1,Math.round(y)));const i=(y*W+x)*4;return Math.max(d[i],d[i+1],d[i+2])};
- const arr=[];for(let i=0;i<d.length;i+=16)arr.push(Math.max(d[i],d[i+1],d[i+2]));
- arr.sort((a,b)=>a-b);
- const dark=$('pol').value==='d',n=+$('nd').value,cw=W/n;
- const bg=arr[arr.length>>1],ink=dark?arr[Math.floor(arr.length*.02)]:arr[Math.floor(arr.length*.98)];
- if(Math.abs(bg-ink)<20)return out;
- const thr=(bg+ink)/2,N=9;let s='',m=1,bad=false;
- for(let k=0;k<n;k++){let on='';
-  for(const g in SG){const[a,b,c,e]=SG[g];let hit=0;
-   for(let i=0;i<N;i++){const t=i/(N-1),u=a+(c-a)*t,vv=b+(e-b)*t,uu=u+(.5-vv)*sl,px=V((k+uu)*cw,vv*H);if(dark?px<thr:px>thr)hit++}
-   const f=hit/N;m=Math.min(m,Math.abs(f-.5));if(f>.5)on+=g;
-   const u=(a+c)/2,vv=(b+e)/2;out.pts.push({x:r.x+r.w*(k+u+(.5-vv)*sl)/n,y:r.y+r.h*vv,on:f>.5})}
-  let ch=on===''?' ':null;for(const q in SEG)if(SEG[q]===on)ch=q;
-  if(ch===null)bad=true;s+=ch}
- if(bad)return out;
- const t=s.trim();if(!t||/ /.test(t))return out;
- out.val=parseInt(t,10)/Math.pow(10,+$('dec').value);out.m=m;return out;
+ sc.drawImage(v,roi.x*sw,roi.y*sh,roi.w*sw,roi.h*sh,0,0,48,16);
+ const d=sc.getImageData(0,0,48,16).data,a=new Float32Array(768);let m=0;
+ for(let i=0;i<768;i++){a[i]=.3*d[i*4]+.59*d[i*4+1]+.11*d[i*4+2];m+=a[i]}
+ m/=768;let s=0;for(let i=0;i<768;i++){a[i]-=m;s+=a[i]*a[i]}
+ s=Math.sqrt(s/768)||1;for(let i=0;i<768;i++)a[i]/=s;return a;
 }
-$('cal').onclick=()=>{
- if(state==='off'){$('st').textContent='Primero inicia la cámara.';return}
- const R=roi;let best=null;
- for(const sl of[0,.1,.2,.3,.4])for(const dx of[-.06,-.03,0,.03,.06])for(const dy of[-.1,0,.1])for(const sc of[.9,1,1.1]){
-  const w=R.w*sc,r={x:Math.max(0,Math.min(1-w,R.x+dx*R.w)),y:Math.max(0,Math.min(1-R.h,R.y+dy*R.h)),w,h:R.h};
-  const o=read(r,sl);
-  if(o.val===0&&(!best||o.m>best.m))best={r,sl,m:o.m}}
- if(best){roi=best.r;SL=best.sl;save();draw();$('st').textContent='✔ Calibrado (inclinación '+SL+'). Comprueba que los puntos verdes caigan sobre el 0 y pulsa Armar.'}
- else $('st').textContent='No logré leer 0.0. Con la balanza en 0.0, encuadra más ajustado (5 posiciones de dígito), sin «g» ni «Zero», y vuelve a calibrar.';
-};
-const un=()=>$('un').value,fmt=x=>x.toFixed(+$('dec').value);
-function start(){state='run';t0=performance.now();$('st').textContent='Cronometrando… registrando a los 10 s.'}
-function finish(val){state='done';$('tm').textContent='10.0 s';
- recs.push({m:val,t:new Date().toLocaleTimeString('es-ES')});render();
- $('st').textContent='✔ Registrado: '+fmt(val)+' '+un()+'. Pulsa Armar para otra medición.';navigator.vibrate&&navigator.vibrate(200)}
-function render(){$('tb').innerHTML='<tr><th>#</th><th>Masa a 10 s</th><th>Hora</th></tr>'+recs.map((r,i)=>`<tr><td>${i+1}</td><td><b>${fmt(r.m)} ${un()}</b></td><td>${r.t}</td></tr>`).join('')}
+function diff(a,b){let t=0;for(let i=0;i<768;i++)t+=Math.abs(a[i]-b[i]);return t/768}
+function stamp(el){const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+ const x=c.getContext('2d');x.drawImage(v,0,0);
+ const txt=new Date().toLocaleString('es-ES')+(el!=null?'  |  t = '+el.toFixed(1)+' s':'');
+ const fs=Math.round(c.height/30);x.font='bold '+fs+'px sans-serif';
+ const w=x.measureText(txt).width+fs;x.fillStyle='rgba(0,0,0,.6)';x.fillRect(0,c.height-fs*1.8,w,fs*1.8);
+ x.fillStyle='#fff';x.fillText(txt,fs/2,c.height-fs*.55);
+ return new Promise(r=>c.toBlob(r,'image/jpeg',.92))}
+async function shoot(el){
+ const b=await stamp(el);n++;const url=URL.createObjectURL(b),name='balanza_'+new Date().toISOString().replace(/[:.]/g,'-')+'.jpg';
+ const f=new File([b],name,{type:'image/jpeg'});
+ const d=document.createElement('div');
+ d.innerHTML='<img src="'+url+'"><div>#'+n+(el!=null?' · '+el.toFixed(1)+' s':'')+'</div>';
+ const a=document.createElement('a');a.href=url;a.download=name;a.textContent='Descargar';a.style.cssText='display:inline-block;padding:6px 8px;font-size:12px;border:1px solid var(--bd);border-radius:10px;color:var(--tx);text-decoration:none;margin-right:4px';
+ const sb=document.createElement('button');sb.textContent='Guardar / Compartir';
+ sb.onclick=async()=>{try{if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f]});else a.click()}catch(e){}};
+ d.append(a,sb);$('gal').prepend(d);
+ try{a.click()}catch(e){}
+ return n}
+function finish(){state='done';draw();$('tm').textContent=(+$('dur').value).toFixed(1)+' s';
+ shoot(+$('dur').value).then(k=>{$('st').textContent='✔ Foto #'+k+' tomada. Abajo puedes guardarla en Fotos o descargarla. Pulsa Armar para otra.';navigator.vibrate&&navigator.vibrate(200)})}
+function start(){state='run';t0=performance.now();draw();$('st').textContent='Cuenta iniciada… la foto se toma a los '+$('dur').value+' s.'}
+$('arm').onclick=async()=>{if(state==='off')return;
+ $('st').textContent='Armando… no muevas nada.';
+ let acc=null,k=0;for(let i=0;i<5;i++){await new Promise(r=>setTimeout(r,80));const s=sample();if(!s)continue;if(!acc)acc=new Float32Array(s);else for(let j=0;j<768;j++)acc[j]+=s[j];k++}
+ if(!k){$('st').textContent='No se pudo leer el vídeo.';return}
+ for(let j=0;j<768;j++)acc[j]/=k;ref=acc;hits=0;state='armed';draw();$('tm').textContent='0.0 s';
+ $('st').textContent='Armado. Esperando que el display cambie…'};
+$('man').onclick=()=>{if(state!=='off')start()};
+$('snap').onclick=()=>{if(state!=='off')shoot(null)};
+$('rst').onclick=()=>{if(state!=='off'){state='idle';draw();$('tm').textContent='0.0 s';$('st').textContent='Cancelado.'}};
 setInterval(()=>{
  if(state==='off')return;
- const o=read(roi,SL);dbg=o.pts;const raw=o.val;let val=null;
- if(raw!==null){if(raw===cand)cc++;else{cand=raw;cc=1}if(cc>=3)val=raw}else{cand=null;cc=0}
- draw();
- if(val!==null){last=val;$('rd').textContent=fmt(val)+' '+un()}else if(raw===null)$('rd').textContent='—';
- if(state==='armed'){
-  if(val===null){hits=0;return}
-  if(val>base+Math.pow(10,-(+$('dec').value))*.5){if(++hits>=2)start()}else{hits=0;base=Math.min(base,val)}
- }else if(state==='run'){
-  const el=(performance.now()-t0)/1000;
-  if(el>=10){finish(last??0)}else $('tm').textContent=el.toFixed(1)+' s';
- }
-},66);
-$('arm').onclick=()=>{if(state==='off')return;base=last??0;hits=0;state='armed';$('tm').textContent='0.0 s';$('st').textContent='Armado (base '+fmt(base)+'). Esperando que la balanza empiece a pesar…'};
-$('man').onclick=()=>{if(state!=='off')start()};
-$('rst').onclick=()=>{if(state!=='off'){state='idle';$('tm').textContent='0.0 s';$('st').textContent='Cancelado.'}};
-$('cl').onclick=()=>{recs=[];render()};
-$('cp').onclick=()=>{const t='n,masa,unidad,hora\n'+recs.map((r,i)=>`${i+1},${fmt(r.m)},${un()},${r.t}`).join('\n');
- navigator.clipboard&&navigator.clipboard.writeText(t).then(()=>$('st').textContent='CSV copiado.').catch(()=>{})};
+ if(state==='armed'||state==='idle'){const s=sample();if(s&&ref){const d=diff(s,ref);$('df').textContent=d.toFixed(2);
+  if(state==='armed'){if(d>+$('sen').value){if(++hits>=3)start()}else hits=0}}}
+ if(state==='run'){const el=(performance.now()-t0)/1000,T=+$('dur').value;
+  if(el>=T)finish();else $('tm').textContent=el.toFixed(1)+' s'}
+},100);
 </script></body></html>
