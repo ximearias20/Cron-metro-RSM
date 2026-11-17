@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FotoBalanza</title>
+<title>FotoBalanza 10 s</title>
 <style>
 :root{--bg:#f4f4f6;--card:#fff;--tx:#18181b;--mu:#6b6b76;--ac:#0a7d4f;--bd:#d9d9e0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root{--bg:#0e0e11;--card:#1a1a1f;--tx:#f2f2f5;--mu:#9a9aa6;--ac:#34d399;--bd:#2c2c34}}
@@ -16,11 +16,10 @@ video{width:100%;display:block}
 #ov{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .big{display:flex;gap:10px;margin-bottom:10px}
 .big div{flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:8px}
-.big b{display:block;font-size:30px;font-variant-numeric:tabular-nums}
+.big b{display:block;font-size:40px;font-variant-numeric:tabular-nums}
 .big small,.mu{color:var(--mu);font-size:12px}
 #st{font-weight:600;margin:6px 0;color:var(--ac)}
-button,select,input{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
-input{width:80px}
+button,select{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
 button.p{background:var(--ac);color:var(--bg);border:0;font-weight:700}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
 #gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
@@ -28,32 +27,29 @@ button.p{background:var(--ac);color:var(--bg);border:0;font-weight:700}
 #gal img{width:100%;border-radius:8px;display:block;margin-bottom:6px}
 #gal button{padding:6px 8px;font-size:12px;margin-right:4px}
 </style></head><body>
-<h1>📸 FotoBalanza</h1>
+<h1>📸 FotoBalanza · 10 s</h1>
 <div class="grid">
 <div class="card">
  <div id="wrap"><video id="v" autoplay playsinline muted></video><canvas id="ov"></canvas></div>
- <div class="row"><button class="p" id="cam">Iniciar cámara</button></div>
- <div class="mu">Arrastra un rectángulo sobre el display (los números y su zona, sin botones). Cuando ese recuadro cambie respecto a como estaba al armar, empieza la cuenta.</div>
- <div class="row">
-  <label class="mu">Tiempo (s) <input id="dur" type="number" min="1" step="0.5" value="10"></label>
-  <label class="mu">Sensibilidad <select id="sen"><option value="0.15">alta</option><option value="0.3" selected>media</option><option value="0.5">baja</option></select></label>
- </div>
+ <div class="row"><button class="p" id="cam">Iniciar cámara</button>
+  <label class="mu">Sensibilidad <select id="sen"><option value="0.12">muy alta</option><option value="0.2" selected>alta</option><option value="0.35">media</option><option value="0.5">baja</option></select></label></div>
+ <div class="mu">Arrastra un rectángulo sobre el display (los números, sin la «g» ni «Zero»). Cuando esos números cambien respecto a como estaban al armar, empieza la cuenta de 10 s.</div>
 </div>
 <div class="card">
- <div class="big"><div><small>Cambio</small><b id="df">0.00</b></div><div><small>Tiempo</small><b id="tm">0.0 s</b></div></div>
+ <div class="big"><div><small>Cambio</small><b id="df">0.00</b></div><div><small>Tiempo</small><b id="tm">10.0 s</b></div></div>
  <div id="st">Inicia la cámara y encuadra el display.</div>
  <div class="row"><button class="p" id="arm">Armar</button><button id="man">Iniciar manual</button><button id="snap">Foto ahora</button><button id="rst">Cancelar</button></div>
- <div class="mu">Armar: guarda cómo se ve el display ahora (déjalo quieto, en cero). Al cambiar, cuenta el tiempo y toma la foto.</div>
+ <div class="mu">Con la balanza en 0.0 y quieta, pulsa Armar. Al detectar peso: 10 s y foto automática.</div>
  <div id="gal"></div>
 </div></div>
 <script>
-const $=i=>document.getElementById(i);
+const $=i=>document.getElementById(i),DUR=10;
 const v=$('v'),ov=$('ov'),ctx=ov.getContext('2d'),sm=document.createElement('canvas'),sc=sm.getContext('2d',{willReadFrequently:true});
 sm.width=48;sm.height=16;
-let roi={x:.55,y:.45,w:.26,h:.12},drag=null,state='off',ref=null,t0=0,hits=0,n=0,urls=[];
-function save(){try{localStorage.setItem('fb1',JSON.stringify({roi,dur:$('dur').value,sen:$('sen').value}))}catch(e){}}
-try{const j=JSON.parse(localStorage.getItem('fb1')||'null');if(j){roi=j.roi;$('dur').value=j.dur;$('sen').value=j.sen}}catch(e){}
-$('dur').onchange=$('sen').onchange=save;
+let roi={x:.55,y:.45,w:.26,h:.12},drag=null,state='off',ref=null,t0=0,hits=0,tFirst=0,n=0;
+function save(){try{localStorage.setItem('fb2',JSON.stringify({roi,sen:$('sen').value}))}catch(e){}}
+try{const j=JSON.parse(localStorage.getItem('fb2')||'null');if(j){roi=j.roi;$('sen').value=j.sen}}catch(e){}
+$('sen').onchange=save;
 $('cam').onclick=async()=>{try{
  const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}},audio:false});
  v.srcObject=s;await v.play();state='idle';$('cam').style.display='none';$('st').textContent='Cámara lista. Encuadra el display y pulsa Armar.';
@@ -61,7 +57,7 @@ $('cam').onclick=async()=>{try{
 function fit(){ov.width=v.clientWidth;ov.height=v.clientHeight;draw()}
 v.addEventListener('loadedmetadata',fit);addEventListener('resize',fit);
 function draw(){ctx.clearRect(0,0,ov.width,ov.height);const W=ov.width,H=ov.height;
- ctx.strokeStyle=state==='run'?'#ff9f1a':'#34d399';ctx.lineWidth=3;ctx.strokeRect(roi.x*W,roi.y*H,roi.w*W,roi.h*H)}
+ ctx.strokeStyle=state==='run'?'#ff9f1a':state==='armed'?'#4da3ff':'#34d399';ctx.lineWidth=3;ctx.strokeRect(roi.x*W,roi.y*H,roi.w*W,roi.h*H)}
 const pt=e=>{const r=ov.getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]};
 ov.onpointerdown=e=>{ov.setPointerCapture(e.pointerId);drag=pt(e)};
 ov.onpointermove=e=>{if(!drag)return;const[x,y]=pt(e);roi={x:Math.min(drag[0],x),y:Math.min(drag[1],y),w:Math.max(.02,Math.abs(x-drag[0])),h:Math.max(.02,Math.abs(y-drag[1]))};draw()};
@@ -94,23 +90,23 @@ async function shoot(el){
  d.append(a,sb);$('gal').prepend(d);
  try{a.click()}catch(e){}
  return n}
-function finish(){state='done';draw();$('tm').textContent=(+$('dur').value).toFixed(1)+' s';
- shoot(+$('dur').value).then(k=>{$('st').textContent='✔ Foto #'+k+' tomada. Abajo puedes guardarla en Fotos o descargarla. Pulsa Armar para otra.';navigator.vibrate&&navigator.vibrate(200)})}
-function start(){state='run';t0=performance.now();draw();$('st').textContent='Cuenta iniciada… la foto se toma a los '+$('dur').value+' s.'}
+function finish(){state='done';draw();$('tm').textContent='0.0 s';
+ shoot(DUR).then(k=>{$('st').textContent='✔ Foto #'+k+' tomada a los 10 s. Guárdala abajo en Fotos o descárgala. Pulsa Armar para otra.';navigator.vibrate&&navigator.vibrate(300)})}
+function start(t){state='run';t0=t||performance.now();draw();$('st').textContent='Peso detectado. Foto en 10 s…'}
 $('arm').onclick=async()=>{if(state==='off')return;
  $('st').textContent='Armando… no muevas nada.';
- let acc=null,k=0;for(let i=0;i<5;i++){await new Promise(r=>setTimeout(r,80));const s=sample();if(!s)continue;if(!acc)acc=new Float32Array(s);else for(let j=0;j<768;j++)acc[j]+=s[j];k++}
+ let acc=null,k=0;for(let i=0;i<6;i++){await new Promise(r=>setTimeout(r,80));const s=sample();if(!s)continue;if(!acc)acc=new Float32Array(s);else for(let j=0;j<768;j++)acc[j]+=s[j];k++}
  if(!k){$('st').textContent='No se pudo leer el vídeo.';return}
- for(let j=0;j<768;j++)acc[j]/=k;ref=acc;hits=0;state='armed';draw();$('tm').textContent='0.0 s';
- $('st').textContent='Armado. Esperando que el display cambie…'};
+ for(let j=0;j<768;j++)acc[j]/=k;ref=acc;hits=0;state='armed';draw();$('tm').textContent='10.0 s';
+ $('st').textContent='Armado. Esperando que la balanza empiece a recibir peso…'};
 $('man').onclick=()=>{if(state!=='off')start()};
 $('snap').onclick=()=>{if(state!=='off')shoot(null)};
-$('rst').onclick=()=>{if(state!=='off'){state='idle';draw();$('tm').textContent='0.0 s';$('st').textContent='Cancelado.'}};
+$('rst').onclick=()=>{if(state!=='off'){state='idle';draw();$('tm').textContent='10.0 s';$('st').textContent='Cancelado.'}};
 setInterval(()=>{
  if(state==='off')return;
  if(state==='armed'||state==='idle'){const s=sample();if(s&&ref){const d=diff(s,ref);$('df').textContent=d.toFixed(2);
-  if(state==='armed'){if(d>+$('sen').value){if(++hits>=3)start()}else hits=0}}}
- if(state==='run'){const el=(performance.now()-t0)/1000,T=+$('dur').value;
-  if(el>=T)finish();else $('tm').textContent=el.toFixed(1)+' s'}
-},100);
+  if(state==='armed'){if(d>+$('sen').value){if(hits===0)tFirst=performance.now();if(++hits>=2)start(tFirst)}else hits=0}}}
+ if(state==='run'){const el=(performance.now()-t0)/1000;
+  if(el>=DUR)finish();else $('tm').textContent=(DUR-el).toFixed(1)+' s'}
+},50);
 </script></body></html>
