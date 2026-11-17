@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CronoBalanza</title>
+<style>
+:root{--bg:#f4f4f6;--card:#fff;--tx:#18181b;--mu:#6b6b76;--ac:#0a7d4f;--bd:#d9d9e0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#0e0e11;--card:#1a1a1f;--tx:#f2f2f5;--mu:#9a9aa6;--ac:#34d399;--bd:#2c2c34}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,system-ui,"Helvetica Neue",Arial,sans-serif;padding:12px;max-width:1100px;margin:auto}
+h1{font-size:20px;margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px}
+#wrap{position:relative;background:#000;border-radius:10px;overflow:hidden;min-height:200px}
+video{width:100%;display:block}
+#ov{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.big{display:flex;gap:10px;margin-bottom:10px}
+.big div{flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:8px}
+.big b{display:block;font-size:34px;font-variant-numeric:tabular-nums}
+.big small,.mu{color:var(--mu);font-size:12px}
+#st{font-weight:600;margin:6px 0;color:var(--ac)}
+button,select{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button.p{background:var(--ac);color:var(--bg);border:0;font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px;border-bottom:1px solid var(--bd);text-align:left}
+</style></head><body>
+<h1>⚖️ CronoBalanza</h1>
+<div class="grid">
+<div class="card">
+ <div id="wrap"><video id="v" autoplay playsinline muted></video><canvas id="ov"></canvas></div>
+ <div class="row"><button class="p" id="cam">Iniciar cámara</button>
+ <span class="mu">Arrastra sobre el vídeo para encuadrar solo los dígitos del display.</span></div>
+ <div class="row">
+  <label class="mu">Dígitos <select id="nd"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+  <label class="mu">Decimales <select id="dec"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
+  <label class="mu">Dígitos <select id="pol"><option value="d">oscuros</option><option value="l">claros</option></select></label>
+  <label class="mu">Unidad <select id="un"><option>g</option><option>kg</option><option>oz</option></select></label>
+ </div>
+</div>
+<div class="card">
+ <div class="big"><div><small>Lectura</small><b id="rd">—</b></div><div><small>Tiempo</small><b id="tm">0.0 s</b></div></div>
+ <div id="st">Inicia la cámara y encuadra el display.</div>
+ <div class="row"><button class="p" id="arm">Armar</button><button id="man">Iniciar manual</button><button id="rst">Cancelar</button></div>
+ <div class="mu">Al armar, el cronómetro arranca solo cuando la lectura sube respecto al valor inicial y se detiene a los 10 s.</div>
+ <table id="tb"><tr><th>#</th><th>Masa a 10 s</th><th>Hora</th></tr></table>
+ <div class="row"><button id="cp">Copiar CSV</button><button id="cl">Borrar</button></div>
+</div></div>
+<script>
+const $=i=>document.getElementById(i);
+const v=$('v'),ov=$('ov'),ctx=ov.getContext('2d'),wk=document.createElement('canvas'),wc=wk.getContext('2d',{willReadFrequently:true});
+let roi={x:.3,y:.4,w:.4,h:.2},drag=null,state='off',base=0,t0=0,last=null,hits=0,recs=[];
+const SEG={0:'abcdef',1:'bc',2:'abdeg',3:'abcdg',4:'bcfg',5:'acdfg',6:'acdefg',7:'abc',8:'abcdefg',9:'abcdfg'};
+const PT={a:[.5,.08],b:[.86,.27],c:[.86,.73],d:[.5,.92],e:[.14,.73],f:[.14,.27],g:[.5,.5]};
+$('cam').onclick=async()=>{try{
+ const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}},audio:false});
+ v.srcObject=s;await v.play();$('st').textContent='Cámara lista. Encuadra los dígitos y pulsa Armar.';state='idle';$('cam').style.display='none';
+}catch(e){$('st').textContent='Sin acceso a la cámara. Concede el permiso en Ajustes de Safari.'}};
+function fit(){ov.width=v.clientWidth;ov.height=v.clientHeight;draw()}
+v.addEventListener('loadedmetadata',fit);addEventListener('resize',fit);
+function draw(){ctx.clearRect(0,0,ov.width,ov.height);const W=ov.width,H=ov.height;
+ ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.strokeRect(roi.x*W,roi.y*H,roi.w*W,roi.h*H);
+ const n=+$('nd').value;ctx.strokeStyle='rgba(52,211,153,.4)';ctx.lineWidth=1;
+ for(let i=1;i<n;i++){const x=(roi.x+roi.w*i/n)*W;ctx.beginPath();ctx.moveTo(x,roi.y*H);ctx.lineTo(x,(roi.y+roi.h)*H);ctx.stroke()}}
+const pt=e=>{const r=ov.getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]};
+ov.onpointerdown=e=>{ov.setPointerCapture(e.pointerId);drag=pt(e)};
+ov.onpointermove=e=>{if(!drag)return;const[x,y]=pt(e);roi={x:Math.min(drag[0],x),y:Math.min(drag[1],y),w:Math.max(.02,Math.abs(x-drag[0])),h:Math.max(.02,Math.abs(y-drag[1]))};draw()};
+ov.onpointerup=()=>drag=null;
+$('nd').onchange=draw;
+function read(){
+ if(!v.videoWidth)return null;
+ const sw=v.videoWidth,sh=v.videoHeight,rx=roi.x*sw,ry=roi.y*sh,rw=roi.w*sw,rh=roi.h*sh;
+ wk.width=Math.max(8,Math.round(rw));wk.height=Math.max(8,Math.round(rh));
+ wc.drawImage(v,rx,ry,rw,rh,0,0,wk.width,wk.height);
+ const W=wk.width,H=wk.height,d=wc.getImageData(0,0,W,H).data;
+ const L=(x,y)=>{x=Math.max(0,Math.min(W-1,x|0));y=Math.max(0,Math.min(H-1,y|0));const i=(y*W+x)*4;return .3*d[i]+.59*d[i+1]+.11*d[i+2]};
+ let mn=255,mx=0;for(let i=0;i<d.length;i+=16){const l=.3*d[i]+.59*d[i+1]+.11*d[i+2];if(l<mn)mn=l;if(l>mx)mx=l}
+ if(mx-mn<35)return null;
+ const th=(mn+mx)/2,dark=$('pol').value==='d',n=+$('nd').value,cw=W/n;let s='';
+ for(let k=0;k<n;k++){let on='';
+  for(const g in PT){let a=0,c=0;const px=k*cw+PT[g][0]*cw,py=PT[g][1]*H,r=Math.max(1,Math.min(cw,H)*.07);
+   for(let dx=-r;dx<=r;dx+=r/2)for(let dy=-r;dy<=r;dy+=r/2){a+=L(px+dx,py+dy);c++}
+   a/=c;if(dark?a<th:a>th)on+=g}
+  let ch=on===''?' ':null;for(const q in SEG)if(SEG[q]===on)ch=q;
+  if(ch===null)return null;s+=ch}
+ const t=s.trim();if(!t||/ /.test(t))return null;
+ return parseInt(t,10)/Math.pow(10,+$('dec').value);
+}
+const un=()=>$('un').value,fmt=x=>x.toFixed(+$('dec').value);
+function start(){state='run';t0=performance.now();$('st').textContent='Cronometrando… registrando a los 10 s.'}
+function finish(val){state='done';$('tm').textContent='10.0 s';
+ recs.push({m:val,t:new Date().toLocaleTimeString('es-ES')});render();
+ $('st').textContent='✔ Registrado: '+fmt(val)+' '+un()+'. Pulsa Armar para otra medición.';navigator.vibrate&&navigator.vibrate(200)}
+function render(){$('tb').innerHTML='<tr><th>#</th><th>Masa a 10 s</th><th>Hora</th></tr>'+recs.map((r,i)=>`<tr><td>${i+1}</td><td><b>${fmt(r.m)} ${un()}</b></td><td>${r.t}</td></tr>`).join('')}
+setInterval(()=>{
+ if(state==='off')return;
+ const val=read();if(val!==null){last=val;$('rd').textContent=fmt(val)+' '+un()}else $('rd').textContent='—';
+ if(state==='armed'){
+  if(val===null){hits=0;return}
+  if(val>base+Math.pow(10,-(+$('dec').value))*.5){if(++hits>=2)start()}else{hits=0;base=Math.min(base,val)}
+ }else if(state==='run'){
+  const el=(performance.now()-t0)/1000;
+  if(el>=10){finish(last??0)}else $('tm').textContent=el.toFixed(1)+' s';
+ }
+},66);
+$('arm').onclick=()=>{if(state==='off')return;base=last??0;hits=0;state='armed';$('tm').textContent='0.0 s';$('st').textContent='Armado (base '+fmt(base)+'). Esperando que la balanza empiece a pesar…'};
+$('man').onclick=()=>{if(state!=='off')start()};
+$('rst').onclick=()=>{if(state!=='off'){state='idle';$('tm').textContent='0.0 s';$('st').textContent='Cancelado.'}};
+$('cl').onclick=()=>{recs=[];render()};
+$('cp').onclick=()=>{const t='n,masa,unidad,hora\n'+recs.map((r,i)=>`${i+1},${fmt(r.m)},${un()},${r.t}`).join('\n');
+ navigator.clipboard&&navigator.clipboard.writeText(t).then(()=>$('st').textContent='CSV copiado.').catch(()=>{})};
+</script></body></html>
